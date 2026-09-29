@@ -1,5 +1,8 @@
 #include "announce.h"
 
+// WIN32_LEAN_AND_MEAN leaves out the COM headers that the MSVC version of
+// uiautomation.h relies on, so include them first.
+#include <ole2.h>
 #include <uiautomation.h>
 
 namespace aab {
