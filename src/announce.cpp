@@ -41,7 +41,7 @@ void announce(HWND hwnd, const std::wstring& text)
     if (FAILED(uia.hostProviderFromHwnd(hwnd, &provider)) || !provider)
         return;
     BSTR message = SysAllocString(text.c_str());
-    BSTR activity = SysAllocString(L"AppAudioBridge");
+    BSTR activity = SysAllocString(L"RhinoAudioRouter");
     uia.raiseNotification(provider, NotificationKind_ActionCompleted,
         NotificationProcessing_ImportantMostRecent, message, activity);
     SysFreeString(message);

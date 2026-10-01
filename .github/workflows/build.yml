@@ -21,11 +21,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item build/Release/AppAudioBridge.clap dist/
+          Copy-Item build/Release/RhinoAudioRouter.clap dist/
           Copy-Item README.md dist/
       - uses: actions/upload-artifact@v4
         with:
-          name: AppAudioBridge-windows-x64
+          name: RhinoAudioRouter-windows-x64
           path: dist/
 
   linux:

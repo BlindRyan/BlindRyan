@@ -379,7 +379,7 @@ const clap_plugin_gui_t Plugin::gui_ = {
 const clap_plugin_descriptor_t kDescriptor = {
     CLAP_VERSION_INIT,
     "com.blindryan.app-audio-bridge",
-    "App Audio Bridge",
+    "Rhino Audio Router",
     "BlindRyan",
     "https://github.com/BlindRyan/BlindRyan",
     "",
