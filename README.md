@@ -1,6 +1,6 @@
 # Rhino Audio Router
 
-A REAPER plugin, designed for screen reader users, that does two jobs:
+An audio plugin, designed for screen reader users, that does two jobs. It comes as a CLAP plugin for REAPER, and as a VST3 plugin for other DAWs on Windows.
 
 1. **Capture a program.** It brings the sound of one program, such as Chrome, Discord, Zoom or a game, into a REAPER track, so you can record it. Put the plugin on several tracks to record several programs, each on its own track.
 2. **Send a track to a device.** It plays a REAPER track to any Windows output device. Paired with a virtual cable, that lets another program such as Zoom hear REAPER as a microphone.
@@ -9,20 +9,27 @@ REAPER keeps using your audio interface (for example a MOTU M2) through ASIO the
 
 The window uses only standard Windows controls, so NVDA and JAWS read it without scripts. Status changes are spoken automatically. It works with OSARA.
 
-Status: early version (0.2.0). Recording a program (Chrome) into REAPER has been tested and works. Sending a track to a device has not been tested yet. Please report what works and what does not.
+Status: early version (0.3.0). Recording a program (Chrome) into REAPER has been tested and works. Not tested yet: sending a track to a device, the VST3 version in other DAWs, and the smoother clock-drift correction added in 0.3.0. Please report what works and what does not.
 
 ## Requirements
 
 - Windows 11, or Windows 10 version 2004 or later. Capturing a single program needs these versions.
 - REAPER 6.71 or later, which supports CLAP plugins. OSARA is recommended.
+- Or another DAW that loads 64-bit VST3 plugins on Windows. The rest of this guide describes REAPER; the plugin window and controls are the same in any DAW.
 - Only for sending a track into another program: a free virtual cable such as VB-Cable from vb-audio.com. Capturing programs does not need it.
 
 ## Installing
 
-1. Download the plugin from [RhinoAudioRouter-windows-x64.zip](downloads/RhinoAudioRouter-windows-x64.zip) (the file is in this repository's `downloads` folder), and unzip it. It contains `RhinoAudioRouter.clap` and this guide. To update an older version, close REAPER first, then replace the file in the next step.
+1. Download the plugin from [RhinoAudioRouter-windows-x64.zip](downloads/RhinoAudioRouter-windows-x64.zip) (the file is in this repository's `downloads` folder), and unzip it. It contains `RhinoAudioRouter.clap` for REAPER, `RhinoAudioRouter.vst3` for other DAWs, and this guide. To update an older version, close REAPER first, then replace the file in the next step.
 2. Copy `RhinoAudioRouter.clap` into `C:\Program Files\Common Files\CLAP`. Create the `CLAP` folder if it does not exist. Windows will ask for administrator permission.
 3. In REAPER, open Preferences (Control+P), go to **Plug-ins**, then **CLAP**, and activate **Re-scan**. Or simply restart REAPER.
 4. The plugin appears in the FX browser as **CLAP: Rhino Audio Router (BlindRyan)**. Type "Rhino" in the FX browser's filter to find it.
+
+### Other DAWs (VST3)
+
+Copy `RhinoAudioRouter.vst3` into `C:\Program Files\Common Files\VST3`, then rescan plugins in your DAW. It is listed as **Rhino Audio Router** by BlindRyan. Use it as an effect on an audio track. Install only the CLAP in REAPER, so it does not appear twice.
+
+In capture mode the plugin replaces the track's sound with the program's sound, except while the DAW is playing without recording, when the track's own recorded audio passes through. This relies on the DAW reporting its transport state to the plugin; if a recording seems silent on playback in your DAW, please report it, and bypass the plugin to listen meanwhile.
 
 ### Upgrading from App Audio Bridge
 
@@ -91,17 +98,17 @@ The track's sound still passes through REAPER normally. The plugin only sends a 
 - **"Waiting for ... to start."** The program is not running. Capture starts when it does.
 - **"Could not capture ...: this version of Windows does not support per-program capture."** Update Windows to one of the versions listed under Requirements.
 - **"Not running yet."** or **"Stopped. REAPER has paused audio for this plugin."** REAPER's audio engine is off, or the FX is bypassed or offline.
-- Occasional small clicks: the program's audio and your audio interface run on separate clocks. The plugin corrects this by skipping or waiting when they drift apart. Smoother correction is planned.
+- Clicks: the program's audio and your audio interface run on separate clocks. Since version 0.3.0 the plugin follows the drift between them by playing up to 0.2% faster or slower, which is too little to hear. It only skips or waits, which can click, if the program's audio stalls or arrives in a burst, for example when the computer is very busy.
 
 ## For developers
 
-The plugin is C++17 and uses the CLAP plugin format, a single header-only SDK that is fetched automatically.
+The plugin is C++17 and is written as a CLAP plugin. The VST3 is built from the same code by [clap-wrapper](https://github.com/free-audio/clap-wrapper), which downloads the MIT-licensed VST3 SDK. The CLAP SDK, clap-wrapper and the VST3 SDK are all fetched automatically.
 
 - `src/engine.cpp`: background thread doing WASAPI process-loopback capture, or event-driven rendering to a device.
-- `src/ring_buffer.h`: lock-free single-producer, single-consumer ring between that thread and REAPER's audio thread. It holds latency steady and absorbs clock drift.
+- `src/ring_buffer.h`: lock-free single-producer, single-consumer ring between that thread and the host's audio thread. It holds latency steady and follows clock drift with a small, cubic-interpolated speed correction.
 - `src/win_audio.cpp`: listing programs through audio sessions and the process tree, listing devices, and activating process loopback.
 - `src/gui.cpp` and `src/announce.cpp`: the accessible window and UI Automation announcements.
-- `src/plugin.cpp` and `src/entry.cpp`: CLAP glue for parameters, state and the window.
+- `src/plugin.cpp` and `src/entry_impl.cpp`: CLAP glue for parameters, state and the window. `src/entry.cpp` exports it; clap-wrapper compiles it once for the CLAP and once for the VST3.
 
 Build on Windows with Visual Studio 2022 and CMake:
 
@@ -123,4 +130,6 @@ Run the unit tests on any platform:
 cmake -S . -B build-tests && cmake --build build-tests && ctest --test-dir build-tests
 ```
 
-Planned next: smooth drift correction by resampling instead of skipping, a VST3 build for other hosts, and a release download page.
+Built plugins land in `build/plugins/CLAP` and `build/plugins/VST3` (inside a `Release` folder with Visual Studio).
+
+Planned next: a release download page.
