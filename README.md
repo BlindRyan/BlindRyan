@@ -9,21 +9,17 @@ REAPER keeps using your audio interface (for example a MOTU M2) through ASIO the
 
 The window uses only standard Windows controls, so NVDA and JAWS read it without scripts. Status changes are spoken automatically. It works with OSARA.
 
-Status: early version. It builds, but it has not been tested on a real system yet. Please report what works and what does not.
+Status: early version (0.1.2). Recording a program (Chrome) into REAPER has been tested and works. Sending a track to a device has not been tested yet. Please report what works and what does not.
 
 ## Requirements
 
 - Windows 11, or Windows 10 version 2004 or later. Capturing a single program needs these versions.
 - REAPER 6.71 or later, which supports CLAP plugins. OSARA is recommended.
-- For sending a track into another program, a free virtual cable such as VB-Cable from vb-audio.com.
+- Only for sending a track into another program: a free virtual cable such as VB-Cable from vb-audio.com. Capturing programs does not need it.
 
 ## Installing
 
-1. Download the plugin:
-   1. On this repository's GitHub page, open the **Actions** tab.
-   2. Open the most recent successful **Build** run.
-   3. Under **Artifacts**, download **AppAudioBridge-windows-x64**. You need to be signed in to GitHub.
-   4. Unzip it. It contains `AppAudioBridge.clap` and this guide.
+1. Download the plugin from [AppAudioBridge-windows-x64.zip](downloads/AppAudioBridge-windows-x64.zip) (the file is in this repository's `downloads` folder), and unzip it. It contains `AppAudioBridge.clap` and this guide. To update an older version, close REAPER first, then replace the file in the next step.
 2. Copy `AppAudioBridge.clap` into `C:\Program Files\Common Files\CLAP`. Create the `CLAP` folder if it does not exist. Windows will ask for administrator permission.
 3. In REAPER, open Preferences (Control+P), go to **Plug-ins**, then **CLAP**, and activate **Re-scan**. Or simply restart REAPER.
 4. The plugin appears in the FX browser as **CLAP: App Audio Bridge (BlindRyan)**. Type "App Audio" in the FX browser's filter to find it.
@@ -59,6 +55,7 @@ REAPER may use some keys itself (Space for play, for example) instead of passing
 4. Play something in the program, then use **Announce level** to confirm sound is arriving.
 5. Set the track to record its output, not its input. In the track's record-arm context menu, choose **Record: output**, then **Record: output (stereo)**.
 6. Arm the track and record as usual. The plugin replaces the track's input with the program's sound, so the track's input selection does not matter.
+7. Play back the recording as usual. While REAPER is playing without recording, the plugin lets the track's recorded items through instead of the live program, so you hear what you recorded. (Versions before 0.1.2 played the live program instead, so recordings seemed silent on playback.)
 
 Repeat on more tracks for more programs. Your microphone can be on its own track, recording from the M2's inputs as normal.
 
