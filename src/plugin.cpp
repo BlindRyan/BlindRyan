@@ -103,7 +103,14 @@ private:
         float* outR = out.channel_count > 1 ? out.data32[1] : nullptr;
         const float gain = float(std::pow(10.0, gainDb_.load() / 20.0));
 
-        if (engine_.mode() == Mode::Capture) {
+        // While REAPER plays back (without recording), let the track's own
+        // audio through, so recorded items on this track can be heard. The
+        // program is still heard directly through its usual device.
+        const clap_event_transport_t* transport = process->transport;
+        const bool playingBack = transport && (transport->flags & CLAP_TRANSPORT_IS_PLAYING)
+            && !(transport->flags & CLAP_TRANSPORT_IS_RECORDING);
+
+        if (engine_.mode() == Mode::Capture && !playingBack) {
             // The program's sound replaces whatever came into the track.
             // Hosts may pre-set the output's constant mask from a silent
             // input and then treat the output as silence, so clear it.
@@ -121,8 +128,8 @@ private:
             return CLAP_PROCESS_CONTINUE;
         }
 
-        // Send mode: pass the track's audio through unchanged, and send a copy
-        // (with the gain applied) to the chosen device.
+        // Pass the track's audio through unchanged. In send mode, also send a
+        // copy (with the gain applied) to the chosen device.
         const float* inL = nullptr;
         const float* inR = nullptr;
         if (process->audio_inputs_count > 0 && process->audio_inputs[0].channel_count > 0) {
@@ -137,7 +144,8 @@ private:
                 std::memset(outR, 0, frames * sizeof(float));
             return CLAP_PROCESS_CONTINUE;
         }
-        engine_.writeSend(inL, inR, frames, gain);
+        if (engine_.mode() == Mode::Send)
+            engine_.writeSend(inL, inR, frames, gain);
         const uint64_t inMask = process->audio_inputs[0].constant_mask;
         out.constant_mask = process->audio_inputs[0].channel_count > 1 ? inMask : (inMask & 1 ? ~uint64_t(0) : 0);
         if (outL != inL)

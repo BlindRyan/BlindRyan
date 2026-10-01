@@ -59,6 +59,7 @@ REAPER may use some keys itself (Space for play, for example) instead of passing
 4. Play something in the program, then use **Announce level** to confirm sound is arriving.
 5. Set the track to record its output, not its input. In the track's record-arm context menu, choose **Record: output**, then **Record: output (stereo)**.
 6. Arm the track and record as usual. The plugin replaces the track's input with the program's sound, so the track's input selection does not matter.
+7. Play back the recording as usual. While REAPER is playing without recording, the plugin lets the track's recorded items through instead of the live program, so you hear what you recorded. (Version 0.1.1 and earlier played the live program instead, so recordings seemed silent on playback.)
 
 Repeat on more tracks for more programs. Your microphone can be on its own track, recording from the M2's inputs as normal.
 
