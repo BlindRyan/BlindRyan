@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(AppAudioBridge VERSION 0.1.2 LANGUAGES CXX)
+project(RhinoAudioRouter VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,26 +25,26 @@ FetchContent_Declare(clap
   GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(clap)
 
-add_library(AppAudioBridge MODULE
+add_library(RhinoAudioRouter MODULE
   src/entry.cpp
   src/plugin.cpp
   src/engine.cpp
   src/win_audio.cpp
   src/gui.cpp
   src/announce.cpp)
-target_link_libraries(AppAudioBridge PRIVATE clap
+target_link_libraries(RhinoAudioRouter PRIVATE clap
   ole32 uuid mmdevapi comctl32 version user32 gdi32)
-target_compile_definitions(AppAudioBridge PRIVATE
+target_compile_definitions(RhinoAudioRouter PRIVATE
   UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00
   AAB_VERSION="${PROJECT_VERSION}")
-set_target_properties(AppAudioBridge PROPERTIES PREFIX "" SUFFIX ".clap")
+set_target_properties(RhinoAudioRouter PROPERTIES PREFIX "" SUFFIX ".clap")
 
 if(MSVC)
-  target_compile_options(AppAudioBridge PRIVATE /W4 /utf-8)
-  set_property(TARGET AppAudioBridge PROPERTY
+  target_compile_options(RhinoAudioRouter PRIVATE /W4 /utf-8)
+  set_property(TARGET RhinoAudioRouter PROPERTY
     MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
-  target_compile_options(AppAudioBridge PRIVATE -Wall -Wextra)
+  target_compile_options(RhinoAudioRouter PRIVATE -Wall -Wextra)
   # Link the runtime statically so the plugin needs no extra DLLs.
-  target_link_options(AppAudioBridge PRIVATE -static -static-libgcc -static-libstdc++)
+  target_link_options(RhinoAudioRouter PRIVATE -static -static-libgcc -static-libstdc++)
 endif()

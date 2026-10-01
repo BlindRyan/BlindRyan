@@ -11,7 +11,7 @@ namespace aab {
 
 namespace {
 
-constexpr wchar_t kWindowClass[] = L"AppAudioBridgeWindow";
+constexpr wchar_t kWindowClass[] = L"RhinoAudioRouterWindow";
 constexpr UINT_PTR kTimerId = 1;
 constexpr UINT kTimerMs = 500;
 constexpr int kWidth = 504;  // logical pixels at 96 DPI
@@ -100,7 +100,7 @@ bool Gui::attach(HWND parent)
     }
     // WS_EX_CONTROLPARENT lets REAPER's own dialog keyboard handling Tab
     // into our controls as if they were part of the FX window.
-    hwnd_ = CreateWindowExW(WS_EX_CONTROLPARENT, kWindowClass, L"App Audio Bridge",
+    hwnd_ = CreateWindowExW(WS_EX_CONTROLPARENT, kWindowClass, L"Rhino Audio Router",
         WS_CHILD | WS_CLIPCHILDREN | WS_VISIBLE, 0, 0, px(kWidth), px(kHeight),
         parent, nullptr, moduleHandle(), this);
     if (!hwnd_)

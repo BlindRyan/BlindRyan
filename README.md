@@ -1,4 +1,4 @@
-# App Audio Bridge
+# Rhino Audio Router
 
 A REAPER plugin, designed for screen reader users, that does two jobs:
 
@@ -9,7 +9,7 @@ REAPER keeps using your audio interface (for example a MOTU M2) through ASIO the
 
 The window uses only standard Windows controls, so NVDA and JAWS read it without scripts. Status changes are spoken automatically. It works with OSARA.
 
-Status: early version (0.1.2). Recording a program (Chrome) into REAPER has been tested and works. Sending a track to a device has not been tested yet. Please report what works and what does not.
+Status: early version (0.2.0). Recording a program (Chrome) into REAPER has been tested and works. Sending a track to a device has not been tested yet. Please report what works and what does not.
 
 ## Requirements
 
@@ -19,10 +19,14 @@ Status: early version (0.1.2). Recording a program (Chrome) into REAPER has been
 
 ## Installing
 
-1. Download the plugin from [AppAudioBridge-windows-x64.zip](downloads/AppAudioBridge-windows-x64.zip) (the file is in this repository's `downloads` folder), and unzip it. It contains `AppAudioBridge.clap` and this guide. To update an older version, close REAPER first, then replace the file in the next step.
-2. Copy `AppAudioBridge.clap` into `C:\Program Files\Common Files\CLAP`. Create the `CLAP` folder if it does not exist. Windows will ask for administrator permission.
+1. Download the plugin from [RhinoAudioRouter-windows-x64.zip](downloads/RhinoAudioRouter-windows-x64.zip) (the file is in this repository's `downloads` folder), and unzip it. It contains `RhinoAudioRouter.clap` and this guide. To update an older version, close REAPER first, then replace the file in the next step.
+2. Copy `RhinoAudioRouter.clap` into `C:\Program Files\Common Files\CLAP`. Create the `CLAP` folder if it does not exist. Windows will ask for administrator permission.
 3. In REAPER, open Preferences (Control+P), go to **Plug-ins**, then **CLAP**, and activate **Re-scan**. Or simply restart REAPER.
-4. The plugin appears in the FX browser as **CLAP: App Audio Bridge (BlindRyan)**. Type "App Audio" in the FX browser's filter to find it.
+4. The plugin appears in the FX browser as **CLAP: Rhino Audio Router (BlindRyan)**. Type "Rhino" in the FX browser's filter to find it.
+
+### Upgrading from App Audio Bridge
+
+Rhino Audio Router was called App Audio Bridge before version 0.2.0. To upgrade, close REAPER, delete `AppAudioBridge.clap` from `C:\Program Files\Common Files\CLAP`, and copy `RhinoAudioRouter.clap` there instead. Projects saved with App Audio Bridge open with Rhino Audio Router and keep their settings.
 
 ## The plugin window
 
@@ -50,7 +54,7 @@ REAPER may use some keys itself (Space for play, for example) instead of passing
 ## Recording a program into REAPER
 
 1. Insert a new track (Control+T) and name it after the program.
-2. Add App Audio Bridge to the track's FX.
+2. Add Rhino Audio Router to the track's FX.
 3. In the plugin window, leave Mode on "Capture audio from a program". Select the program in the list and press Enter or Use selected. You should hear "Capturing ...".
 4. Play something in the program, then use **Announce level** to confirm sound is arriving.
 5. Set the track to record its output, not its input. In the track's record-arm context menu, choose **Record: output**, then **Record: output (stereo)**.
@@ -70,7 +74,7 @@ REAPER may process FX ahead of time on tracks that are not armed, which does not
 ## Sending a track into another program (for example Zoom)
 
 1. Install VB-Cable and restart Windows.
-2. Add App Audio Bridge to the track you want to send, for example your microphone track, or a bus with several tracks routed to it.
+2. Add Rhino Audio Router to the track you want to send, for example your microphone track, or a bus with several tracks routed to it.
 3. Set Mode to "Send this track to an output device", select **CABLE Input (VB-Audio Virtual Cable)**, and press Enter.
 4. In Zoom, Discord or any other program, choose **CABLE Output** as the microphone.
 
