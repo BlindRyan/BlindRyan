@@ -46,8 +46,9 @@ static void testUnderrunPadsWithSilence()
     ring.readPlanar(outL.data(), outR.data(), 16);
     CHECK(outL[15] == 0.5f && ring.underruns() == 0);
     ring.readPlanar(outL.data(), outR.data(), 16); // only 4 frames left
-    CHECK(outL[3] == 0.5f);
-    CHECK(outL[4] == 0.0f && outR[15] == 0.0f);
+    // One frame stays queued for interpolation, so 3 come out.
+    CHECK(outL[2] == 0.5f);
+    CHECK(outL[3] == 0.0f && outR[15] == 0.0f);
     CHECK(ring.underruns() == 1);
 }
 
@@ -72,21 +73,87 @@ static void testDiscardsBacklog()
 
 static void testWrapAroundAndFullRing()
 {
+    // A continuous ramp streamed through a small ring in uneven pieces must
+    // come out as the same ramp: never going backwards, and following the
+    // input closely once flowing.
     aab::StereoRing ring;
-    ring.allocate(16);
-    ring.setLatency(1, 100);
+    ring.allocate(64);
+    ring.setLatency(8, 100);
 
-    std::vector<float> in(12), out(24);
-    for (int round = 0; round < 5; ++round) {
-        for (size_t i = 0; i < in.size(); ++i)
-            in[i] = float(round * 100 + int(i));
+    float next = 1.0f, last = 0.0f;
+    bool ordered = true, close = true;
+    std::vector<float> in(12), out(26);
+    for (int round = 0; round < 200; ++round) {
+        for (auto& v : in)
+            v = next++;
         CHECK(ring.writePlanar(in.data(), in.data(), 12) == 12);
-        ring.readInterleaved(out.data(), 12);
-        for (size_t i = 0; i < 12; ++i)
-            CHECK(out[2 * i] == in[i] && out[2 * i + 1] == in[i]);
+        ring.readInterleaved(out.data(), 13 - round % 3);
+        for (size_t i = 0; i < size_t(13 - round % 3); ++i) {
+            const float v = out[2 * i];
+            if (v == 0.0f)
+                continue;
+            if (v < last || v != out[2 * i + 1])
+                ordered = false;
+            if (v > next || v < next - 64.0f)
+                close = false;
+            last = v;
+        }
     }
+    CHECK(ordered);
+    CHECK(close);
+    CHECK(last > next - 64.0f);
+
+    aab::StereoRing small;
+    small.allocate(16);
     std::vector<float> big(20, 1.0f);
-    CHECK(ring.writePlanar(big.data(), big.data(), 20) == 16);
+    CHECK(small.writePlanar(big.data(), big.data(), 20) == 16);
+}
+
+static void testFollowsClockDrift()
+{
+    // The producer delivers 0.1% more audio than the consumer reads in real
+    // time. The consumer should speed up slightly to absorb it, with no
+    // discards or underruns once settled, and keep the queue near its target.
+    aab::StereoRing ring;
+    ring.allocate(48000);
+    ring.setLatency(1500, 2880);
+
+    std::vector<float> in(481, 0.25f), l(480), r(480);
+    for (int block = 0; block < 2; ++block)
+        ring.writePlanar(in.data(), in.data(), 481);
+    ring.readPlanar(l.data(), r.data(), 480);
+    for (int block = 0; block < 4000; ++block) { // 40 seconds at 48 kHz
+        ring.writePlanar(in.data(), in.data(), block % 2 ? 481 : 480);
+        ring.readPlanar(l.data(), r.data(), 480);
+        if (block == 1000)
+            CHECK(ring.discards() == 0 && ring.underruns() == 0);
+    }
+    CHECK(ring.discards() == 0);
+    CHECK(ring.underruns() == 0);
+    CHECK(ring.ratio() > 1.0 && ring.ratio() <= 1.0 + aab::StereoRing::kMaxCorrection);
+    CHECK(ring.queuedFrames() < 1500 + 2880);
+    CHECK(l[479] == 0.25f);
+}
+
+static void testSlowsDownWhenStarved()
+{
+    // The producer delivers 0.1% less than real time: the consumer should
+    // slow down slightly instead of running dry.
+    aab::StereoRing ring;
+    ring.allocate(48000);
+    ring.setLatency(1500, 2880);
+
+    std::vector<float> in(480, 0.25f), l(480), r(480);
+    for (int block = 0; block < 4; ++block)
+        ring.writePlanar(in.data(), in.data(), 480);
+    for (int block = 0; block < 4000; ++block) {
+        // 479.5 frames per block on average.
+        ring.writePlanar(in.data(), in.data(), block % 2 ? 479 : 480);
+        ring.readPlanar(l.data(), r.data(), 480);
+    }
+    CHECK(ring.underruns() == 0);
+    CHECK(ring.discards() == 0);
+    CHECK(ring.ratio() < 1.0);
 }
 
 static void testReset()
@@ -107,12 +174,13 @@ static void testInt16Conversion()
     aab::StereoRing ring;
     ring.allocate(100);
     ring.setLatency(1, 100);
-    const int16_t pcm[4] = { 16384, -32768, 0, 32767 };
-    ring.writeInterleavedInt16(pcm, 2);
+    const int16_t pcm[8] = { 16384, -32768, 0, 32767, 0, 32767, 0, 32767 };
+    ring.writeInterleavedInt16(pcm, 4);
     float out[4];
     ring.readInterleaved(out, 2);
-    CHECK(out[0] == 0.5f && out[1] == -1.0f && out[2] == 0.0f);
-    CHECK(std::fabs(out[3] - 1.0f) < 0.001f);
+    CHECK(out[0] == 0.5f && out[1] == -1.0f);
+    CHECK(std::fabs(out[2]) < 0.01f);
+    CHECK(std::fabs(out[3] - 1.0f) < 0.01f);
 }
 
 static void testConcurrentOrdering()
@@ -137,7 +205,8 @@ static void testConcurrentOrdering()
     float last = 0.0f;
     bool ordered = true;
     std::vector<float> l(48), r(48);
-    while (last < float(total)) {
+    // The newest frame stays queued for interpolation, so stop one short.
+    while (last < float(total - 1)) {
         ring.readPlanar(l.data(), r.data(), l.size());
         for (size_t i = 0; i < l.size(); ++i) {
             if (l[i] == 0.0f)
@@ -157,6 +226,8 @@ int main()
     testUnderrunPadsWithSilence();
     testDiscardsBacklog();
     testWrapAroundAndFullRing();
+    testFollowsClockDrift();
+    testSlowsDownWhenStarved();
     testReset();
     testInt16Conversion();
     testConcurrentOrdering();

@@ -3,13 +3,16 @@
 // Lock-free single-producer / single-consumer ring of stereo float frames,
 // stored interleaved (L R L R ...).
 //
-// The two ends run on different clocks (REAPER's audio interface on one side,
-// a Windows audio stream on the other), so the consumer keeps the amount of
-// queued audio near a target latency:
+// The two ends run on different clocks (the host's audio interface on one
+// side, a Windows audio stream on the other), so the consumer keeps the amount
+// of queued audio near a target latency:
 //   * it outputs silence until `target` frames have been queued,
-//   * if the queue runs dry it outputs silence and waits for `target` again,
-//   * if more than `target + slack` frames pile up it discards the excess.
-// This trades an occasional tiny glitch for bounded, stable latency.
+//   * it reads slightly faster or slower than real time (at most 0.2%, too
+//     little to hear) to follow the drift between the two clocks smoothly,
+//     using cubic interpolation between frames,
+//   * only if that cannot keep up (the queue runs dry, or more than
+//     `target + slack` frames pile up) does it fall back to outputting
+//     silence or discarding the excess.
 
 #include <algorithm>
 #include <atomic>
@@ -86,28 +89,25 @@ public:
     void readPlanar(float* left, float* right, size_t frames, float gain = 1.0f)
     {
         consume(frames,
-            [&](const float* src, size_t offset, size_t count) {
-                for (size_t i = 0; i < count; ++i) {
-                    left[offset + i] = src[2 * i] * gain;
-                    right[offset + i] = src[2 * i + 1] * gain;
-                }
-            },
-            [&](size_t offset, size_t count) {
-                std::fill(left + offset, left + offset + count, 0.0f);
-                std::fill(right + offset, right + offset + count, 0.0f);
+            [&](size_t i, float l, float r) {
+                left[i] = l * gain;
+                right[i] = r * gain;
             });
     }
 
     void readInterleaved(float* dst, size_t frames)
     {
-        consume(frames,
-            [&](const float* src, size_t offset, size_t count) {
-                std::copy(src, src + 2 * count, dst + 2 * offset);
-            },
-            [&](size_t offset, size_t count) {
-                std::fill(dst + 2 * offset, dst + 2 * (offset + count), 0.0f);
-            });
+        consume(frames, [&](size_t i, float l, float r) {
+            dst[2 * i] = l;
+            dst[2 * i + 1] = r;
+        });
     }
+
+    // Current read speed relative to real time (1.0 = no correction).
+    double ratio() const { return ratio_.load(); }
+
+    // Largest speed correction, as a fraction of real time.
+    static constexpr double kMaxCorrection = 0.002;
 
 private:
     template <class Fill>
@@ -130,53 +130,92 @@ private:
         return n;
     }
 
-    template <class Copy, class Zero>
-    void consume(size_t frames, Copy&& copy, Zero&& zero)
+    const float* frameAt(uint64_t index) const { return &buf_[2 * size_t(index % capacity_)]; }
+
+    // Restart interpolation cleanly at frame `r` (after a reset or a jump).
+    void restartAt(uint64_t r)
     {
-        if (capacity_ == 0) {
-            zero(0, frames);
-            return;
-        }
-        const uint64_t w = write_.load(std::memory_order_acquire);
-        uint64_t r = read_.load(std::memory_order_relaxed);
+        frac_ = 0.0;
+        const float* f = frameAt(r);
+        prev_[0] = f[0];
+        prev_[1] = f[1];
+    }
 
-        if (resetRequested_.exchange(false)) {
-            r = w;
-            buffering_ = true;
-        }
+    static float cubic(float xm1, float x0, float x1, float x2, float t)
+    {
+        // Catmull-Rom spline through four neighbouring samples.
+        return x0
+            + 0.5f * t * (x1 - xm1 + t * (2.0f * xm1 - 5.0f * x0 + 4.0f * x1 - x2 + t * (3.0f * (x0 - x1) + x2 - xm1)));
+    }
 
-        size_t available = size_t(w - r);
-        const size_t target = target_.load();
+    template <class Put>
+    void consume(size_t frames, Put&& put)
+    {
+        size_t i = 0;
+        if (capacity_ != 0) {
+            const uint64_t w = write_.load(std::memory_order_acquire);
+            uint64_t r = read_.load(std::memory_order_relaxed);
 
-        if (buffering_) {
-            if (available < std::max(target, frames)) {
-                read_.store(r, std::memory_order_release);
-                zero(0, frames);
-                return;
+            if (resetRequested_.exchange(false)) {
+                r = w;
+                buffering_ = true;
             }
-            buffering_ = false;
-        }
 
-        if (available > target + slack_.load()) {
-            r += available - target;
-            available = target;
-            discards_.fetch_add(1);
-        }
+            size_t available = size_t(w - r);
+            const size_t target = std::max<size_t>(target_.load(), 1);
 
-        const size_t n = std::min(frames, available);
-        size_t done = 0;
-        while (done < n) {
-            const size_t pos = size_t((r + done) % capacity_);
-            const size_t chunk = std::min(n - done, capacity_ - pos);
-            copy(&buf_[2 * pos], done, chunk);
-            done += chunk;
+            if (buffering_) {
+                if (available < std::max(target, frames + 2)) {
+                    read_.store(r, std::memory_order_release);
+                    for (; i < frames; ++i)
+                        put(i, 0.0f, 0.0f);
+                    return;
+                }
+                buffering_ = false;
+                restartAt(r);
+                smoothedFill_ = double(available);
+            }
+
+            if (available > target + slack_.load()) {
+                r += available - target;
+                available = target;
+                discards_.fetch_add(1);
+                restartAt(r);
+                smoothedFill_ = double(available);
+            }
+
+            // Follow the queue level slowly (time constant of roughly 16k
+            // frames) and nudge the read speed towards the target level.
+            const double alpha = std::min(1.0, double(frames) / 16384.0);
+            smoothedFill_ += alpha * (double(available) - smoothedFill_);
+            const double error = (smoothedFill_ - double(target)) / double(target);
+            const double ratio = 1.0 + std::clamp(error * 2.0 * kMaxCorrection, -kMaxCorrection, kMaxCorrection);
+            ratio_.store(ratio, std::memory_order_relaxed);
+
+            // Each output needs the frame after the read position, so one
+            // frame always stays queued until the next frame arrives.
+            for (; i < frames && r + 1 < w; ++i) {
+                const float* x0 = frameAt(r);
+                const float* x1 = frameAt(r + 1);
+                const float* x2 = r + 2 < w ? frameAt(r + 2) : x1;
+                const float t = float(frac_);
+                put(i, cubic(prev_[0], x0[0], x1[0], x2[0], t), cubic(prev_[1], x0[1], x1[1], x2[1], t));
+                frac_ += ratio;
+                while (frac_ >= 1.0 && r + 1 < w) {
+                    prev_[0] = frameAt(r)[0];
+                    prev_[1] = frameAt(r)[1];
+                    frac_ -= 1.0;
+                    ++r;
+                }
+            }
+            if (i < frames) {
+                buffering_ = true;
+                underruns_.fetch_add(1);
+            }
+            read_.store(r, std::memory_order_release);
         }
-        if (n < frames) {
-            zero(n, frames - n);
-            buffering_ = true;
-            underruns_.fetch_add(1);
-        }
-        read_.store(r + n, std::memory_order_release);
+        for (; i < frames; ++i)
+            put(i, 0.0f, 0.0f);
     }
 
     std::vector<float> buf_;
@@ -188,7 +227,12 @@ private:
     std::atomic<bool> resetRequested_ { false };
     std::atomic<uint32_t> underruns_ { 0 };
     std::atomic<uint32_t> discards_ { 0 };
-    bool buffering_ = true; // consumer-only
+    std::atomic<double> ratio_ { 1.0 };
+    // Consumer-only state.
+    bool buffering_ = true;
+    double frac_ = 0.0;      // position between frame read_ and the next
+    float prev_[2] = {};     // the frame before read_, for interpolation
+    double smoothedFill_ = 0.0;
 };
 
 } // namespace aab
