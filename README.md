@@ -9,7 +9,7 @@ REAPER keeps using your audio interface (for example a MOTU M2) through ASIO the
 
 The window uses only standard Windows controls, so NVDA and JAWS read it without scripts. Status changes are spoken automatically. It works with OSARA.
 
-Status: early version (0.3.0). Recording a program (Chrome) into REAPER has been tested and works, including the smoother clock-drift correction added in 0.3.0. Not tested yet: sending a track to a device, and the VST3 version in other DAWs. Please report what works and what does not.
+Status: early version (0.3.0). In REAPER, both jobs have been tested and work: recording a program (Chrome), including the smoother clock-drift correction added in 0.3.0, and sending a track to an output device. Not tested yet: the VST3 version in other DAWs. Please report what works and what does not.
 
 ## Requirements
 
